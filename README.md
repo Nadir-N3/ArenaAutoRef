@@ -1,3 +1,10 @@
+Berikut adalah README.md yang bisa kamu gunakan untuk upload ke GitHub.
+
+
+---
+
+README.md
+
 # Auto Referral Bot (Multi-Threading)
 
 Bot otomatis untuk melakukan pendaftaran akun dengan sistem referal pada **ArenaVS Quest**.  
@@ -15,5 +22,117 @@ Menggunakan **multi-threading** agar lebih cepat dan **tampilan interaktif** den
 
 1. **Clone Repository**
    ```sh
-   git clone https://github.com/Nadir-N3/ArenaAutoRef.git
-   cd ArenaAutoRef
+   git clone https://github.com/username/repo-name.git
+   cd repo-name
+
+2. Install Dependencies
+
+pip install -r requirements.txt
+
+
+
+
+---
+
+⚙️ Cara Penggunaan
+
+1. Siapkan File Proxy (Optional)
+Buat file proxies.txt dan masukkan daftar proxy (1 proxy per baris). Jika tidak ada, bot tetap bisa berjalan tanpa proxy.
+
+
+2. Jalankan Script
+
+python bot.py
+
+
+3. Masukkan Inputan
+
+Referral Code → Masukkan kode referal
+
+Jumlah Referral → Tentukan jumlah akun yang ingin didaftarkan
+
+Jumlah Thread (Opsional) → Default 5 (bisa diubah untuk kecepatan lebih tinggi)
+
+
+
+4. Proses Otomatis Berjalan
+
+Akun akan dibuat secara otomatis
+
+Bot akan menyelesaikan tugas-tugas yang tersedia
+
+Data akun akan tersimpan di accounts.txt
+
+
+
+
+
+---
+
+📄 Format Output (accounts.txt)
+
+Setiap akun yang berhasil dibuat akan disimpan dalam format berikut:
+
+User ID: 123456
+Private Key: 0xabc123...
+Address: 0xwallet123...
+Referral Code: REF12345
+XP: 100000
+============================================================
+
+
+---
+
+🔧 Konfigurasi
+
+Max Threads → Bisa disesuaikan agar lebih cepat, tapi jangan terlalu tinggi agar tidak terkena limit.
+
+Proxy → Gunakan proxy untuk keamanan dan menghindari rate limit.
+
+
+
+---
+
+🛠 Dependencies
+
+Python 3.8+
+
+requests
+
+eth_account
+
+fake_useragent
+
+colorama
+
+tqdm
+
+
+Install semua dependencies dengan:
+
+pip install -r requirements.txt
+
+
+---
+
+🚀 Catatan
+
+Gunakan bot ini dengan bijak.
+
+Developer tidak bertanggung jawab atas penyalahgunaan.
+
+Jika ada error, silakan cek log dan pastikan semua dependency sudah terinstall.
+
+
+
+---
+
+📌 Lisensi
+
+Bot ini dibuat untuk tujuan edukasi dan bersifat open-source.
+Silakan gunakan atau modifikasi sesuai kebutuhan.
+
+
+---
+
+Happy Botting! 🚀
