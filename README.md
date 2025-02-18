@@ -30,7 +30,7 @@ pip install -r requirements.txt
 ⚙️ Cara Penggunaan
 
 1. Siapkan File Proxy (Optional)
-Buat file proxies.txt dan masukkan daftar proxy (1 proxy per baris). Jika tidak ada, bot tetap bisa berjalan tanpa proxy.
+Buat file proxy.txt dan masukkan daftar proxy (1 proxy per baris). Jika tidak ada, bot tetap bisa berjalan tanpa proxy.
 
 
 2. Jalankan Script
