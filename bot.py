@@ -35,10 +35,11 @@ TASKS = {
 def show_banner():
     os.system("cls" if os.name == "nt" else "clear")
     print(f"""{Fore.YELLOW}{Style.BRIGHT}
-══════════════════════════════════════════════
-      🏆 ARENA VS BOT - Automated Referrals
-      Secure | Fast | Reliable
-══════════════════════════════════════════════{Style.RESET_ALL}
+╔══════════════════════════════════════════════╗
+║     🏆 ARENA VS BOT - Automated Referrals   ║
+║   Automate ArenaVS registrations & tasks!   ║
+║  Developed by: https://t.me/sentineldiscus  ║
+╚══════════════════════════════════════════════╝{Style.RESET_ALL}
 """)
 
 # Membaca daftar proxy dari file & mendeteksi jenisnya
