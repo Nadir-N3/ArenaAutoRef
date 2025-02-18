@@ -15,8 +15,8 @@ Menggunakan **multi-threading** agar lebih cepat dan **tampilan interaktif** den
 
 1. **Clone Repository**
    ```sh
-   git clone https://github.com/username/repo-name.git
-   cd repo-name
+   git clone https://github.com/Yuurichan-N3/ArenaAutoRef.git
+   cd ArenaAutoRef
 
 2. Install Dependencies
 
