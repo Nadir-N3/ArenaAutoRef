@@ -1,9 +1,4 @@
-Berikut adalah README.md yang bisa kamu gunakan untuk upload ke GitHub.
-
-
----
-
-README.md
+Berikut adalah README.md yang bisa 
 
 # Auto Referral Bot (Multi-Threading)
 
