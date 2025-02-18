@@ -1,5 +1,3 @@
-Berikut adalah README.md yang bisa 
-
 # Auto Referral Bot (Multi-Threading)
 
 Bot otomatis untuk melakukan pendaftaran akun dengan sistem referal pada **ArenaVS Quest**.  
