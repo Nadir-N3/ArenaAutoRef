@@ -4,15 +4,26 @@ import json
 import random
 import requests
 import time
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from fake_useragent import UserAgent
 from tqdm import tqdm
 from eth_account import Account
-from colorama import Fore, Style, init
+import logging
+from rich.logging import RichHandler
+from rich.console import Console
+from rich.table import Table
 
-# Inisialisasi Colorama
-init(autoreset=True)
+# Inisialisasi Rich Console
+console = Console()
+
+# Konfigurasi logging dengan RichHandler
+logging.basicConfig(
+    level="INFO",
+    format="%(message)s",
+    datefmt="[%X]",
+    handlers=[RichHandler(rich_tracebacks=True, console=console)],
+)
+logger = logging.getLogger("ArenaVS-Bot")
 
 # Header default untuk request
 DEFAULT_HEADERS = {
@@ -31,18 +42,20 @@ TASKS = {
     4: {"name": "Join Discord", "reward": 20000}
 }
 
-# Menampilkan banner
+# Menampilkan banner dengan Rich Console
 def show_banner():
     os.system("cls" if os.name == "nt" else "clear")
-    print(f"""{Fore.YELLOW}{Style.BRIGHT}
+    console.print(f"""
+[bold yellow]
 ╔══════════════════════════════════════════════╗
 ║     🏆 ARENA VS BOT - Automated Referrals   ║
 ║   Automate ArenaVS registrations & tasks!   ║
 ║  Developed by: https://t.me/sentineldiscus  ║
-╚══════════════════════════════════════════════╝{Style.RESET_ALL}
+╚══════════════════════════════════════════════╝
+[/bold yellow]
 """)
 
-# Membaca daftar proxy dari file & mendeteksi jenisnya
+# Membaca daftar proxy dari file
 def load_proxies(filename='proxy.txt'):
     proxies = []
     if os.path.exists(filename):
@@ -50,7 +63,7 @@ def load_proxies(filename='proxy.txt'):
             for line in f:
                 proxy = line.strip()
                 if proxy:
-                    if "://" not in proxy:  # Jika hanya IP:Port, default ke HTTP
+                    if "://" not in proxy:
                         proxy = f"http://{proxy}"
                     proxies.append(proxy)
     return proxies
@@ -59,6 +72,40 @@ def load_proxies(filename='proxy.txt'):
 def get_random_proxy(proxies):
     return random.choice(proxies) if proxies else None
 
+# Menyimpan proxy yang gagal ke proxyfailed.json
+def save_failed_proxy(proxy, reason="Failed"):
+    failed_data = []
+    if os.path.exists('proxyfailed.json'):
+        with open('proxyfailed.json', 'r') as f:
+            failed_data = json.load(f)
+    
+    failed_data.append({"proxy": proxy, "reason": reason, "timestamp": datetime.now().isoformat()})
+    with open('proxyfailed.json', 'w') as f:
+        json.dump(failed_data, f, indent=4)
+
+# Menghapus proxy yang gagal dari proxy.txt
+def remove_failed_proxy(proxy, filename='proxy.txt'):
+    if os.path.exists(filename):
+        with open(filename, 'r') as f:
+            lines = f.readlines()
+        with open(filename, 'w') as f:
+            for line in lines:
+                cleaned_line = line.strip()
+                cleaned_proxy = proxy.replace("http://", "").strip()
+                if cleaned_line != cleaned_proxy:
+                    f.write(line)
+
+# Mengecek apakah proxy berfungsi
+def check_proxy(proxy):
+    url = "https://www.google.com"
+    proxies = {'http': proxy, 'https': proxy}
+    try:
+        response = requests.get(url, proxies=proxies, timeout=5)
+        response.raise_for_status()
+        return True
+    except requests.RequestException:
+        return False
+
 # Membuat dompet Ethereum baru
 def generate_wallet():
     priv = secrets.token_hex(32)
@@ -66,7 +113,7 @@ def generate_wallet():
     acct = Account.from_key(private_key)
     return private_key, acct.address
 
-# Mendaftarkan dompet ke sistem ArenaVS
+# Mendaftarkan dompet ke sistem ArenaVS dengan proxy
 def register_wallet(wallet_address, referral_code, proxy):
     url = "https://quest-api.arenavs.com/api/v1/users/initialize"
     headers = {**DEFAULT_HEADERS, 'user-agent': UserAgent().chrome}
@@ -75,11 +122,23 @@ def register_wallet(wallet_address, referral_code, proxy):
 
     try:
         response = requests.post(url, headers=headers, json=data, proxies=proxies, timeout=15)
+        if response.status_code == 429:  # Too Many Requests
+            logger.debug(f"Rate limit hit (429) for wallet {wallet_address}. Retrying after delay...")
+            time.sleep(5)  # Tambahkan delay lebih lama untuk 429
+            response = requests.post(url, headers=headers, json=data, proxies=proxies, timeout=15)
+            response.raise_for_status()
+        else:
+            response.raise_for_status()
+        logger.debug(f"Registration response: {response.json()}")
         return response.json()
-    except Exception:
+    except requests.RequestException as e:
+        logger.error(f"Registration failed for wallet {wallet_address}: {str(e)}")
+        if proxy:
+            save_failed_proxy(proxy, str(e))
+            remove_failed_proxy(proxy)
         return None
 
-# Menyelesaikan tugas
+# Fungsi untuk menyelesaikan tugas
 def complete_task(user_id, task_id, token, proxy):
     url = f"https://quest-api.arenavs.com/api/v1/tasks/{task_id}/complete/{user_id}"
     headers = {**DEFAULT_HEADERS, 'user-agent': UserAgent().chrome, 'authorization': f'Bearer {token}'}
@@ -87,11 +146,22 @@ def complete_task(user_id, task_id, token, proxy):
 
     try:
         response = requests.post(url, headers=headers, json={}, proxies=proxies, timeout=15)
+        if response.status_code == 429:
+            logger.debug(f"Rate limit hit (429) for task {task_id}. Retrying after delay...")
+            time.sleep(5)  # Delay untuk 429
+            response = requests.post(url, headers=headers, json={}, proxies=proxies, timeout=15)
+            response.raise_for_status()
+        else:
+            response.raise_for_status()
         return response.json()
-    except Exception:
+    except requests.RequestException as e:
+        logger.error(f"Task completion failed for task {task_id}: {str(e)}")
+        if proxy:
+            save_failed_proxy(proxy, str(e))
+            remove_failed_proxy(proxy)
         return None
 
-# Mendapatkan data user
+# Fungsi untuk mendapatkan data user
 def get_user_data(wallet_address, token, proxy):
     url = f"https://quest-api.arenavs.com/api/v1/users/{wallet_address}"
     headers = {**DEFAULT_HEADERS, 'user-agent': UserAgent().chrome, 'authorization': f'Bearer {token}'}
@@ -99,39 +169,83 @@ def get_user_data(wallet_address, token, proxy):
 
     try:
         response = requests.get(url, headers=headers, proxies=proxies, timeout=15)
+        if response.status_code == 429:
+            logger.debug(f"Rate limit hit (429) for user data {wallet_address}. Retrying after delay...")
+            time.sleep(5)
+            response = requests.get(url, headers=headers, proxies=proxies, timeout=15)
+            response.raise_for_status()
+        else:
+            response.raise_for_status()
         return response.json()
-    except Exception:
+    except requests.RequestException as e:
+        logger.error(f"Failed to fetch user data for wallet {wallet_address}: {str(e)}")
+        if proxy:
+            save_failed_proxy(proxy, str(e))
+            remove_failed_proxy(proxy)
         return None
 
-# Fungsi utama untuk memproses satu akun
-def process_account(wallet_num, referral_code, proxies):
+# Fungsi utama untuk memproses satu akun dan mengembalikan data untuk tabel
+def process_account(wallet_num, referral_code, proxies, account_results):
     proxy = get_random_proxy(proxies)
-    private_key, wallet_address = generate_wallet()
-
-    print(f"{Fore.CYAN}🔹 [{wallet_num}] Generating Wallet: {wallet_address}{Style.RESET_ALL}")
     if proxy:
-        print(f"{Fore.YELLOW}🌐 [{wallet_num}] Using Proxy: {proxy}{Style.RESET_ALL}")
+        if not check_proxy(proxy):
+            logger.warning(f"Proxy {proxy} is not working. Removing...")
+            save_failed_proxy(proxy, "Proxy not working")
+            remove_failed_proxy(proxy)
+            proxy = get_random_proxy(proxies)
+    
+    private_key, wallet_address = generate_wallet()
+    logger.info(f"Account {wallet_num}: Generating Wallet {wallet_address[:10]}...")
+
+    # Delay untuk menghindari 429
+    time.sleep(random.uniform(1, 3))
 
     reg_response = register_wallet(wallet_address, referral_code, proxy)
 
-    if not reg_response or "user" not in reg_response or "token" not in reg_response:
-        print(f"{Fore.RED}❌ [{wallet_num}] Registration failed! Skipping...{Style.RESET_ALL}")
+    if not reg_response or "user" not in reg_response:
+        logger.warning(f"Account {wallet_num}: Registration failed.")
+        account_results.append({
+            "No": wallet_num,
+            "Wallet Address": wallet_address[:10] + "...",
+            "Registration Status": "Failed",
+            "Reason": "Invalid or missing response data",
+            "XP": "N/A",
+            "Task Status": "N/A"
+        })
         return
 
-    user_id = reg_response['user']['id']
-    token = reg_response['token']
-    refcode = reg_response['user']['referralCode']
+    # Sesuaikan dengan struktur respons seperti di bot.py
+    user = reg_response.get('user', {})
+    user_id = user.get('id')
+    token = reg_response.get('token')  # Ambil token dari tingkat utama respons, bukan dari 'user'
+    refcode = user.get('referralCode')
 
-    print(f"{Fore.GREEN}✅ [{wallet_num}] Registration successful! User ID: {user_id}{Style.RESET_ALL}")
+    if not all([user_id, token, refcode]):
+        logger.warning(f"Account {wallet_num}: Missing required user data (ID, token, or referral code).")
+        account_results.append({
+            "No": wallet_num,
+            "Wallet Address": wallet_address[:10] + "...",
+            "Registration Status": "Failed",
+            "Reason": "Missing user data",
+            "XP": "N/A",
+            "Task Status": "N/A"
+        })
+        return
 
-    for task_id, task_info in TASKS.items():
-        print(f"{Fore.YELLOW}➡️ [{wallet_num}] Completing Task: {task_info['name']} (Reward: {task_info['reward']} XP){Style.RESET_ALL}")
+    logger.info(f"Account {wallet_num}: Registered successfully. User ID: {user_id}")
+
+    task_status = {}
+    for task_id, task_info in tqdm(TASKS.items(), desc=f"Account {wallet_num} Tasks", leave=False):
+        logger.info(f"Account {wallet_num}: Completing {task_info['name']} (Reward: {task_info['reward']} XP)")
         result = complete_task(user_id, task_id, token, proxy)
+        time.sleep(random.uniform(1, 2))  # Delay antar tugas
 
-        if result and result.get('status'):
-            print(f"{Fore.GREEN}✅ [{wallet_num}] {task_info['name']} completed!{Style.RESET_ALL}")
+        status = "Completed" if result and result.get('status') else "Failed"
+        task_status[task_info['name']] = status
+        if status == "Completed":
+            logger.info(f"Account {wallet_num}: {task_info['name']} completed!")
         else:
-            print(f"{Fore.RED}❌ [{wallet_num}] Failed to complete {task_info['name']}{Style.RESET_ALL}")
+            logger.warning(f"Account {wallet_num}: Failed to complete {task_info['name']}")
 
     user_data = get_user_data(wallet_address, token, proxy)
 
@@ -144,44 +258,67 @@ def process_account(wallet_num, referral_code, proxies):
             f.write(f"XP: {user_data.get('xp', 0)}\n")
             f.write("=" * 60 + "\n\n")
 
-        print(f"{Fore.MAGENTA}💾 [{wallet_num}] Account saved to accounts.txt{Style.RESET_ALL}")
+        logger.info(f"Account {wallet_num} saved to accounts.txt")
 
-# Fungsi utama untuk menjalankan banyak akun sekaligus
+        # Tambahkan data ke daftar hasil untuk tabel
+        task_summary = ", ".join([f"{name}: {status}" for name, status in task_status.items()])
+        account_results.append({
+            "No": wallet_num,
+            "Wallet Address": wallet_address[:10] + "...",
+            "Registration Status": "Success",
+            "Reason": "",
+            "XP": user_data.get('xp', 0),
+            "Task Status": task_summary
+        })
+
+# Fungsi utama untuk menjalankan akun secara sekuensial
 def main():
     show_banner()
-    
+
     proxies = load_proxies()
     if proxies:
-        print(f"{Fore.GREEN}🔌 {len(proxies)} proxies loaded. Running with proxies.{Style.RESET_ALL}")
+        logger.info(f"{len(proxies)} proxies loaded. Running with proxies.")
     else:
-        print(f"{Fore.YELLOW}⚠️ No proxies found. Running without proxies.{Style.RESET_ALL}")
+        logger.warning("No proxies found. Running without proxies.")
 
-    referral_code = input(f"{Fore.YELLOW}🎟 Enter your referral code: {Style.RESET_ALL}")
-    num_refs = int(input(f"{Fore.YELLOW}🔢 Enter number of referrals: {Style.RESET_ALL}"))
+    referral_code = console.input("[yellow]🎟 Enter your referral code: [/yellow]")
+    num_refs = int(console.input("[yellow]🔢 Enter number of referrals: [/yellow]"))
 
-    try:
-        max_threads = int(input(f"{Fore.YELLOW}⚡ Enter number of threads (default 5): {Style.RESET_ALL}").strip() or "5")
-        if max_threads < 1:
-            raise ValueError
-    except ValueError:
-        print(f"{Fore.RED}❌ Invalid input! Using default: 5 threads.{Style.RESET_ALL}")
-        max_threads = 5
+    console.print("\n")
 
-    print("\n")
+    # Inisialisasi daftar untuk menyimpan hasil akun
+    account_results = []
 
-    with ThreadPoolExecutor(max_workers=max_threads) as executor:
-        with tqdm(total=num_refs, desc="Processing", ncols=80) as pbar:
-            futures = []
-            for i in range(1, num_refs + 1):
-                future = executor.submit(process_account, i, referral_code, proxies)
-                future.add_done_callback(lambda _: pbar.update(1))
-                futures.append(future)
+    with tqdm(total=num_refs, desc="Processing Accounts", ncols=80) as pbar:
+        for i in range(1, num_refs + 1):
+            process_account(i, referral_code, proxies, account_results)
+            pbar.update(1)
 
-            for future in futures:
-                future.result()
+    # Buat dan tampilkan tabel untuk semua akun yang diproses
+    if account_results:
+        account_table = Table(title="Account Processing Summary")
+        account_table.add_column("No", style="cyan")
+        account_table.add_column("Wallet Address", style="cyan")
+        account_table.add_column("Registration Status", style="green")
+        account_table.add_column("Reason", style="yellow")
+        account_table.add_column("XP", style="cyan")
+        account_table.add_column("Task Status", style="green")
 
-    print(f"{Fore.GREEN}🎉 Process completed! {num_refs} wallets registered.{Style.RESET_ALL}")
+        for result in account_results:
+            account_table.add_row(
+                str(result["No"]),
+                result["Wallet Address"],
+                result["Registration Status"],
+                result["Reason"],
+                str(result["XP"]) if "XP" in result else "N/A",
+                result["Task Status"] if "Task Status" in result else "N/A"
+            )
+
+        console.print(account_table)
+    else:
+        logger.warning("No accounts were processed.")
+
+    logger.info(f"Process completed! {len(account_results)} accounts processed.")
 
 if __name__ == "__main__":
     main()
-    
